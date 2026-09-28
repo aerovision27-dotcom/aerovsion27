@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GIS + 3D Property Integration — 3D ULPIN</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+.integration-grid{display:grid;grid-template-columns:minmax(280px, 0.85fr) minmax(0, 1.65fr);gap:18px;align-items:stretch}.map-card,.info-card{background:#101e31;border:1px solid #263c58;border-radius:16px;padding:18px}.info-card{display:flex;flex-direction:column;min-width:0}.map-img{width:100%;max-height:560px;object-fit:contain;border-radius:10px;border:1px solid #263c58;background:#07111f}.mini-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}.btn2{background:#172941;color:#dbe8f8;border:1px solid #36516f;padding:10px 14px;border-radius:9px;cursor:pointer;text-decoration:none}.btn2.primary{background:#2d7ef7;border-color:#2d7ef7}.statusbox{margin-top:12px;padding:12px;border-radius:10px;background:#0b1727;color:#91a5bd;font-size:13px;line-height:1.55}.stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:18px 0}.stat{background:#101e31;border:1px solid #263c58;border-radius:13px;padding:14px}.stat span{display:block;color:#8398b2;font-size:12px}.stat strong{display:block;font-size:26px;margin-top:6px}.viewer{width:100%;height:100%;min-height:500px;background:#0e1a2c;border:1px solid #263c58;border-radius:16px}.flow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:16px 0}.flow .node{padding:10px 14px;border:1px solid #385675;border-radius:10px;background:#12233a}.flow b{color:#6e87a4}.table-wrap{max-height:340px;overflow:auto}.clickrow{cursor:pointer}.clickrow:hover{background:#142842}.selected{outline:2px solid #4f9cff}.pill{display:inline-block;padding:4px 8px;border-radius:999px;background:#163050;color:#8fc1ff;font-size:11px;margin-left:8px}.detail-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}.detail{background:#0b1727;border:1px solid #243b56;border-radius:9px;padding:9px}.detail small{display:block;color:#7890aa}.detail strong{display:block;margin-top:4px}.unit-wrap{max-height:180px;overflow:auto;margin-top:12px}.unit-wrap table{font-size:12px}.unit-wrap th,.unit-wrap td{padding:7px}.review-banner{padding:12px 14px;background:#10263e;border:1px solid #2d5278;border-radius:10px;margin-bottom:14px;color:#c8dbef}.review-banner b{color:#fff}@media(max-width:1000px){.integration-grid{grid-template-columns:1fr}.viewer{height:520px}.stat-row{grid-template-columns:repeat(2,1fr)}.detail-grid{grid-template-columns:repeat(2,1fr)}}
+</style></head>
+<body><div class="shell"><aside class="sidebar">
+<div class="brand"><div class="logo">3D</div><div><h1>ULPIN Lab</h1><p>Vertical Property Mapping</p></div></div>
+<div class="nav-title">WORKSPACE</div><a class="nav" href="/">Dashboard</a><a class="nav" href="/ai-extraction">AI Building Footprint</a><a class="nav active">GIS + 3D Integration</a>
+  <a class="nav" href="/logout">Logout</a>
+</aside><main>
+<header><div><h2>GIS + 3D Property Integration</h2><p>Actual AI footprints → prototype GIS parcels → vertical property model → prototype 3D ULPIN.</p></div><div class="status"><span></span> V8 • Final Geometry Build</div></header>
+<div class="integration-grid"><section class="map-card"><h3>Input Aerial Image</h3><img class="map-img" id="latestImage" src="/sample_aerial.png" alt="Aerial image used for AI extraction"><div class="mini-actions"><button class="btn2 primary" id="loadAI">Use Latest AI Result</button></div><div class="statusbox" id="status">Select “Use Latest AI Result” to load the most recent building footprints and generate the 3D property view.</div></section>
+<section class="info-card"><h3>3D Property View</h3><div id="plot3d" class="viewer"></div></section></div>
+<div class="stat-row"><div class="stat"><span>AI Buildings</span><strong id="sBuildings">—</strong></div><div class="stat"><span>GIS Parcels</span><strong id="sParcels">—</strong></div><div class="stat"><span>Vertical Units</span><strong id="sUnits">—</strong></div><div class="stat"><span>Maximum Floors</span><strong id="sFloors">—</strong></div></div>
+<section class="table-card"><div class="card-head"><div><h3 id="registerHeading">3D Property Register</h3><p id="registerHelp">Click any building in the 3D view or table to inspect its vertical property identity.</p></div></div><div id="detailPanel" class="statusbox" style="display:none"></div><div id="registerTableWrap" class="table-wrap"><table><thead><tr><th>Parcel</th><th>Building</th><th>Footprint</th><th>Height</th><th>Floors</th><th>Center</th></tr></thead><tbody id="buildingTable"></tbody></table></div></section>
+</main></div>
+<script>
+const $=id=>document.getElementById(id); let result=null;
+function getSaved(){try{return JSON.parse(localStorage.getItem('ulpin_ai_result')||'null')}catch(e){return null}}
+function polygonArea(p){let a=0;for(let i=0;i<p.length;i++){let q=p[i],r=p[(i+1)%p.length];a+=q[0]*r[1]-r[0]*q[1]}return a/2}
+function cross(a,b,c){return (b[0]-a[0])*(c[1]-b[1])-(b[1]-a[1])*(c[0]-b[0])}
+function pointInTri(p,a,b,c){const c1=cross(p,a,b),c2=cross(p,b,c),c3=cross(p,c,a);return (c1>=0&&c2>=0&&c3>=0)||(c1<=0&&c2<=0&&c3<=0)}
+function triangulate(poly){
+  if(poly.length<3)return [];
+  const pts=poly.slice(); const ccw=polygonArea(pts)>0; const idx=pts.map((_,i)=>i); const tris=[]; let guard=0;
+  while(idx.length>3 && guard++<5000){let ear=false;
+    for(let k=0;k<idx.length;k++){const ia=idx[(k-1+idx.length)%idx.length],ib=idx[k],ic=idx[(k+1)%idx.length];const a=pts[ia],b=pts[ib],c=pts[ic];
+      const cr=cross(a,b,c); if((ccw&&cr<=0)||(!ccw&&cr>=0))continue;
+      let inside=false; for(const j of idx){if(j===ia||j===ib||j===ic)continue;if(pointInTri(pts[j],a,b,c)){inside=true;break}}
+      if(inside)continue; tris.push([ia,ib,ic]);idx.splice(k,1);ear=true;break;
+    }
+    if(!ear)break;
+  }
+  if(idx.length===3)tris.push([idx[0],idx[1],idx[2]]);
+  return tris;
+}
+function footprintMesh(b){
+  const p=b.local_polygon,h=b.height_m,n=p.length; const top=p.map(q=>[q[0],q[1],h]),bot=p.map(q=>[q[0],q[1],0]);
+  const verts=bot.concat(top), tris=triangulate(p); let I=[],J=[],K=[];
+  for(const t of tris){I.push(t[0]);J.push(t[1]);K.push(t[2]);I.push(t[0]+n);J.push(t[2]+n);K.push(t[1]+n)}
+  for(let i=0;i<n;i++){const j=(i+1)%n;I.push(i);J.push(j);K.push(i+n);I.push(j);J.push(j+n);K.push(i+n)}
+  return {type:'mesh3d',x:verts.map(v=>v[0]+b.x),y:verts.map(v=>v[1]+b.y),z:verts.map(v=>v[2]),i:I,j:J,k:K,opacity:.58,flatshading:false,name:b.building_id,meta:{building_id:b.building_id},customdata:Array(verts.length).fill(b.building_id),hovertemplate:`<b>${b.building_id}</b><br>Parcel: ${b.parcel_id}<br>AI Footprint: ${b.area_sq_m} m²<br>Prototype Height: ${b.height_m} m<br>Floors: ${b.floors}<extra></extra>`};
+}
+function footprintLine(b,z=0){const p=b.local_polygon;return {type:'scatter3d',mode:'lines',x:p.map(q=>q[0]+b.x).concat([p[0][0]+b.x]),y:p.map(q=>q[1]+b.y).concat([p[0][1]+b.y]),z:p.map(()=>z),line:{width:z===0?5:2},name:`${b.building_id} floor ${Math.round(z/3)+1}`,customdata:p.map(()=>b.building_id),meta:{building_id:b.building_id},hoverinfo:'skip',showlegend:false}}
+function parcelLine(b){const p=b.parcel_polygon;return {type:'scatter3d',mode:'lines',x:p.map(q=>q[0]+b.x).concat([p[0][0]+b.x]),y:p.map(q=>q[1]+b.y).concat([p[0][1]+b.y]),z:p.map(()=>0.05),line:{width:3},name:b.parcel_id,customdata:p.map(()=>b.building_id),meta:{building_id:b.building_id},hovertemplate:`<b>${b.parcel_id}</b><br>Prototype parcel around ${b.building_id}<extra></extra>`}}
+function labelTrace(buildings){return {type:'scatter3d',mode:'text',x:buildings.map(b=>b.x+b.footprint_width_m/2),y:buildings.map(b=>b.y+b.footprint_depth_m/2),z:buildings.map(b=>b.height_m+.4),text:buildings.map(b=>b.building_id),customdata:buildings.map(b=>b.building_id),meta:{building_id:buildings.length===1?buildings[0].building_id:'building-labels'},textfont:{size:10},hoverinfo:'skip',showlegend:false}}
+async function build(polys,w=1536,h=1024,source='AI',imageUrl=null){
+  $('status').textContent=`Preserving ${polys.length} ${source} footprint polygons and generating geometry-based 3D buildings…`;
+  const res=await fetch('/build-3d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({polygons:polys,image_width:w,image_height:h,scale_m_per_px:0.08})});
+  const d=await res.json(); if(!res.ok)throw new Error(d.error||'Integration failed'); result=d;
+  if(imageUrl)$('latestImage').src=imageUrl;
+  $('sBuildings').textContent=d.summary.buildings; $('sParcels').textContent=d.summary.parcels; $('sUnits').textContent=d.summary.units; $('sFloors').textContent=d.summary.max_floors;
+  render(d); table(d); $('status').innerHTML=`<b>Complete.</b> ${source} footprints → preserved building geometry → prototype parcels → ${d.summary.buildings} 3D buildings → ${d.summary.units} vertical units.`;
+}
+function plotLayout(){return {paper_bgcolor:'#0e1a2c',plot_bgcolor:'#0e1a2c',margin:{l:0,r:0,t:10,b:0},showlegend:false,scene:{bgcolor:'#0e1a2c',xaxis:{title:'Local X (m)',gridcolor:'#263650'},yaxis:{title:'Local Y (m)',gridcolor:'#263650'},zaxis:{title:'Elevation (m)',gridcolor:'#263650'},aspectmode:'data',camera:{eye:{x:1.55,y:1.45,z:1.15}}},uirevision:'keep-camera'}}
+function buildingTraces(buildings){
+  const traces=[];
+  buildings.forEach(b=>{
+    traces.push(parcelLine(b));
+    traces.push(footprintMesh(b));
+    for(let f=1;f<=b.floors;f++)traces.push(footprintLine(b,(f-1)*3));
+  });
+  traces.push(labelTrace(buildings));
+  return traces;
+}
+function attachBuildingClick(){
+  const plot=$('plot3d');
+  if(plot.__buildingSelectionHandlerAttached)return;
+  plot.__buildingSelectionHandlerAttached=true;
+  plot.on('plotly_click',ev=>{
+    const point=ev?.points?.[0];
+    if(!point||!result?.buildings?.length)return;
+    let id=point.data?.meta?.building_id;
+    if(!id){
+      const cd=point.customdata;
+      id=Array.isArray(cd)?cd[0]:cd;
+    }
+    if(id&&typeof id==='object')id=id.building_id||id.id;
+    if(!id)return;
+    const index=result.buildings.findIndex(b=>String(b.building_id)===String(id));
+    if(index>=0)showBuilding(index);
+  });
+}
+function render(d){
+  Plotly.react('plot3d',buildingTraces(d.buildings),plotLayout(),{responsive:true,displaylogo:false});
+  attachBuildingClick();
+}
+function renderSingleBuilding(b){
+  Plotly.react('plot3d',buildingTraces([b]),plotLayout(),{responsive:true,displaylogo:false});
+  attachBuildingClick();
+}
+function table(d){
+  $('buildingTable').innerHTML=d.buildings.map((b,i)=>`<tr class="clickrow" onclick="showBuilding(${i})"><td>${b.parcel_id}</td><td>${b.building_id}</td><td>${b.area_sq_m} m²</td><td>${b.height_m} m</td><td>${b.floors}</td><td>${b.center_lat}, ${b.center_lon}</td></tr>`).join('');
+  $('registerTableWrap').style.display='block';
+  $('detailPanel').style.display='none';
+  $('registerHeading').textContent='3D Property Register';
+  $('registerHelp').textContent='Click any building in the 3D view or table to inspect its vertical property identity.';
+}
+function showBuilding(i){
+  if(!result||!result.buildings[i])return;
+  const b=result.buildings[i],units=result.floors.filter(u=>u.building_id===b.building_id);
+  const rows=units.map(u=>`<tr><td>${u.floor_no}</td><td>${u.unit_id}</td><td>${u.elevation_m} m</td><td>${u.unit_area_sq_m} m²</td><td><span class="pill">${u.prototype_3d_ulpin}</span></td></tr>`).join('');
+  $('registerHeading').textContent=`Building ${b.building_id} Details`;
+  $('registerHelp').textContent=`Selected parcel ${b.parcel_id}. Use the button below to return to the complete building list.`;
+  $('registerTableWrap').style.display='none';
+  $('detailPanel').style.display='block';
+  $('detailPanel').innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px"><b>Selected: ${b.building_id} / ${b.parcel_id}</b><button type="button" class="btn2 primary" id="backToAll">← Back to All Buildings</button></div><div class="detail-grid"><div class="detail"><small>AI Footprint</small><strong>${b.area_sq_m} m²</strong></div><div class="detail"><small>Prototype Height</small><strong>${b.height_m} m</strong></div><div class="detail"><small>Floors</small><strong>${b.floors}</strong></div><div class="detail"><small>Vertical Units</small><strong>${units.length}</strong></div></div><div class="statusbox" style="margin-top:10px">Geometry source: <b>${b.geometry_source}</b><br>Prototype georeferencing scale: 0.08 m/pixel<br>Height source: prototype rule; replace with LiDAR/DSM/floor-plan data.</div><div class="unit-wrap"><table><thead><tr><th>Floor</th><th>Unit</th><th>Elevation</th><th>Area</th><th>Prototype 3D ID</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  renderSingleBuilding(b);
+  $('backToAll').onclick=()=>{
+    $('detailPanel').style.display='none';
+    $('registerTableWrap').style.display='block';
+    $('registerHeading').textContent='3D Property Register';
+    $('registerHelp').textContent='Click any building in the 3D view or table to inspect its vertical property identity.';
+    render(result);
+  };
+}
+$('loadAI').onclick=()=>{const d=getSaved();if(!d||!d.polygons||!d.polygons.length){$('status').textContent='No AI result found. Go to AI Building Footprint, run extraction, then return here.';return}build(d.polygons,d.image_width||1536,d.image_height||1024,'Actual AI',d.input_image_url||null).catch(e=>$('status').textContent=e.message)};
+const saved=getSaved();if(saved?.input_image_url)$('latestImage').src=saved.input_image_url;if(new URLSearchParams(location.search).get('load')==='latest'){if(saved&&saved.polygons?.length){$('loadAI').click()}else{$('status').textContent='No saved AI result found. Run AI extraction first, then use Continue with These AI Polygons.'}}
+</script></body></html>

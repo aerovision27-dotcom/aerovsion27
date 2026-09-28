@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D ULPIN Generation System — Project Overview</title>
+  <style>
+    :root {
+      --navy: #09162d;
+      --card: #142746;
+      --line: #2b4568;
+      --blue: #245da8;
+      --text: #f5f8ff;
+      --muted: #c1d0e5;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      padding: 14px 14px 90px;
+      background: #f4f6fa;
+      color: var(--text);
+      font-family: Inter, "Segoe UI", Arial, sans-serif;
+    }
+    .overview {
+      width: min(100%, 980px);
+      margin: 0 auto;
+      background: var(--navy);
+      border-radius: 11px;
+      padding: 16px 18px 30px;
+      position: relative;
+      box-shadow: 0 8px 28px rgba(11, 29, 57, .08);
+    }
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid #2b4262;
+    }
+    .brand h1 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 750;
+      letter-spacing: -.25px;
+    }
+    .brand p {
+      margin: 3px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .logout {
+      display: inline-block;
+      background: #bd2029;
+      color: white;
+      text-decoration: none;
+      padding: 7px 11px;
+      border-radius: 7px;
+      font-size: 12px;
+      font-weight: 700;
+      transition: background .15s ease;
+    }
+    .logout:hover { background: #9e1720; }
+    .section-title {
+      margin: 19px 0 11px;
+      font-size: 17px;
+      font-weight: 750;
+    }
+    .overview-list {
+      display: grid;
+      gap: 10px;
+    }
+    .info-card {
+      background: var(--card);
+      border-radius: 8px;
+      padding: 12px 10px;
+    }
+    .info-card h3 {
+      margin: 0 0 7px;
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .info-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12.5px;
+      line-height: 1.55;
+    }
+    .action-area {
+      margin-top: 15px;
+      padding-top: 16px;
+      border-top: 1px solid #2b4262;
+    }
+    .new-project {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      min-height: 48px;
+      padding: 12px 16px;
+      border-radius: 9px;
+      background: var(--blue);
+      color: #fff;
+      text-decoration: none;
+      font-size: 15px;
+      font-weight: 700;
+      box-shadow: 0 4px 12px rgba(36, 93, 168, .18);
+      transition: background .15s ease, transform .15s ease;
+    }
+    .new-project:hover {
+      background: #1c4e91;
+      transform: translateY(-1px);
+    }
+    .plus {
+      width: 20px;
+      height: 20px;
+      display: inline-grid;
+      place-items: center;
+      border: 1px solid rgba(255,255,255,.65);
+      border-radius: 50%;
+      font-size: 14px;
+      line-height: 1;
+    }
+    .sticky-action {
+      position: fixed;
+      z-index: 20;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      padding: 10px 14px max(10px, env(safe-area-inset-bottom));
+      background: rgba(244, 246, 250, .96);
+      backdrop-filter: blur(8px);
+      border-top: 1px solid #dbe3ef;
+    }
+    .sticky-inner {
+      width: min(100%, 944px);
+      margin: 0 auto;
+    }
+    .sticky-inner .new-project { min-height: 48px; }
+    .sticky-note {
+      margin: 7px 0 0;
+      text-align: center;
+      color: #63748b;
+      font-size: 11px;
+    }
+    .workflow-note {
+      width: min(100%, 980px);
+      margin: 18px auto 0;
+      color: #52647b;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    @media (min-width: 720px) {
+      body { padding-top: 20px; }
+      .overview { padding: 18px 22px 30px; }
+      .brand h1 { font-size: 21px; }
+      .info-card { padding: 13px 12px; }
+      .info-card h3 { font-size: 14.5px; }
+      .info-card p { font-size: 13px; }
+    }
+    @media (max-width: 420px) {
+      body { padding: 8px 8px 86px; }
+      .overview { padding: 14px 12px 26px; }
+      .brand h1 { font-size: 17px; }
+      .section-title { font-size: 16px; }
+      .info-card { padding: 11px 10px; }
+      .sticky-action { padding-left: 8px; padding-right: 8px; }
+    }
+
+    .info-card { padding: 0; overflow: hidden; }
+    .info-card summary {
+      list-style: none; cursor: pointer; display: flex; align-items: center;
+      justify-content: space-between; gap: 14px; padding: 14px 13px;
+      font-size: 14px; font-weight: 700; line-height: 1.4;
+    }
+    .info-card summary::-webkit-details-marker { display: none; }
+    .expand-icon {
+      flex: 0 0 24px; width: 24px; height: 24px; display: inline-grid;
+      place-items: center; border: 1px solid #49658c; border-radius: 50%;
+      color: #dceaff; font-size: 18px; font-weight: 500;
+      transition: transform .18s ease, background .18s ease;
+    }
+    .info-card[open] .expand-icon { transform: rotate(45deg); background: #245da8; }
+    .details-content { padding: 0 13px 14px; }
+    .details-content p { margin: 0 0 9px; color: var(--muted); font-size: 12.5px; line-height: 1.6; }
+    .details-content ul { margin: 0; padding-left: 19px; color: var(--muted); font-size: 12px; line-height: 1.7; }
+    .details-content li { padding-left: 2px; margin: 3px 0; }
+    .details-content strong { color: #f5f8ff; }
+
+  </style>
+</head>
+<body>
+  <main class="overview">
+    <header class="topbar">
+      <div class="brand">
+        <h1>3D ULPIN Generation System</h1>
+        <p>Project Overview</p>
+      </div>
+      <a class="logout" href="/logout">Logout</a>
+    </header>
+
+    <section aria-labelledby="technical-title">
+      <h2 class="section-title" id="technical-title">Technical Overview</h2>
+      <div class="overview-list">
+        <details class="info-card">
+          <summary><span>System Architecture</span><span class="expand-icon" aria-hidden="true">+</span></summary>
+          <div class="details-content">
+            <p>Flask-based web application integrating the user interface, application backend, AI inference, image processing, 3D modeling, and property visualization.</p>
+            <ul>
+              <li><strong>Frontend:</strong> HTML, CSS, and JavaScript for the dashboard and guided project workflow.</li>
+              <li><strong>Application backend:</strong> Python Flask for routing, login sessions, uploads, and processing requests.</li>
+              <li><strong>AI processing:</strong> Trained U-Net with a ResNet34 encoder for building footprint segmentation.</li>
+              <li><strong>Geospatial processing:</strong> Building-mask processing, footprint polygon extraction, and geometry checks.</li>
+              <li><strong>3D generation:</strong> Building geometry, floor-wise modeling, and property-unit records.</li>
+              <li><strong>Visualization and output:</strong> Interactive 3D viewer, property details, and property register.</li>
+            </ul>
+          </div>
+        </details>
+        <details class="info-card">
+          <summary><span>AI Model — U-Net + ResNet34</span><span class="expand-icon" aria-hidden="true">+</span></summary>
+          <div class="details-content">
+            <p>Deep learning-based building segmentation using a trained U-Net model with a ResNet34 encoder to identify building footprints from aerial or drone imagery.</p>
+            <ul>
+              <li><strong>Architecture:</strong> U-Net encoder–decoder network with skip connections.</li>
+              <li><strong>Encoder:</strong> ResNet34 for hierarchical image-feature extraction.</li>
+              <li><strong>Task:</strong> Pixel-level building versus non-building segmentation.</li>
+              <li><strong>Inference:</strong> Processes an input image and predicts a building segmentation mask.</li>
+              <li><strong>Output:</strong> Building mask passed to the polygon extraction stage.</li>
+            </ul>
+          </div>
+        </details>
+        <details class="info-card">
+          <summary><span>Image Processing &amp; Polygon Extraction</span><span class="expand-icon" aria-hidden="true">+</span></summary>
+          <div class="details-content">
+            <p>Converts AI-generated building masks into building footprint polygons and prepares validated geometry for 3D generation.</p>
+            <ul>
+              <li><strong>Mask processing:</strong> Identifies and prepares building regions from the segmentation mask.</li>
+              <li><strong>Contour extraction:</strong> Detects boundaries of individual building regions.</li>
+              <li><strong>Polygon generation:</strong> Converts building regions into vector footprint polygons.</li>
+              <li><strong>Geometry refinement:</strong> Cleans boundaries and may simplify polygon shapes.</li>
+              <li><strong>Validation:</strong> Checks geometry validity and prepares spatial data for the next stage.</li>
+              <li><strong>Output:</strong> Building footprint polygons and associated spatial information.</li>
+            </ul>
+          </div>
+        </details>
+        <details class="info-card">
+          <summary><span>3D Property Generation</span><span class="expand-icon" aria-hidden="true">+</span></summary>
+          <div class="details-content">
+            <p>Transforms validated building footprints into 3D building representations with floor-wise structures and individual property-unit records.</p>
+            <ul>
+              <li><strong>Input:</strong> Building footprint polygons and spatial attributes.</li>
+              <li><strong>3D geometry:</strong> Extrudes footprints using configured height or floor parameters.</li>
+              <li><strong>Floor-wise modeling:</strong> Represents floors using floor count and floor-height settings.</li>
+              <li><strong>Property units:</strong> Organizes units by building and floor with associated attributes.</li>
+              <li><strong>Prototype identifiers:</strong> Assigns demonstration 3D ULPINs to generated units.</li>
+              <li><strong>Output:</strong> 3D building models and property-unit records for visualization.</li>
+            </ul>
+          </div>
+        </details>
+      </div>
+    </section>
+
+  </main>
+
+  <div class="sticky-action" role="region" aria-label="Project action">
+    <div class="sticky-inner">
+      <a class="new-project" href="/new-project">
+        <span class="plus" aria-hidden="true">+</span>
+        Start New Project
+      </a>
+    </div>
+  </div>
+</body>
+</html>

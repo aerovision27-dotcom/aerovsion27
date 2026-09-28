@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Building Footprint → Polygon Extraction — 3D ULPIN</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="shell">
+<aside class="sidebar">
+  <div class="brand"><div class="logo">3D</div><div><h1>ULPIN Lab</h1><p>Vertical Property Mapping</p></div></div>
+  <div class="nav-title">WORKSPACE</div>
+  <a class="nav active">AI Building Footprint → Polygon Extraction</a>
+  <a class="nav" href="/gis-3d">GIS + 3D Integration <span>V8</span></a>
+  <a class="nav" href="/logout">Logout</a>
+  
+</aside>
+
+<main>
+<header>
+  <div><h2>AI Building Footprint → Polygon Extraction</h2><p>Generate candidate building regions from an aerial, drone, satellite, or building image. Review all candidates before GIS use.</p></div>
+  <div class="status"><span></span> U-Net ResNet34 + OpenCV</div>
+</header>
+
+
+<section class="upload-card">
+  <div><h3>Input Image</h3><p>Recommended: clear top-down aerial imagery without map labels, pins, or road overlays. Review all candidate polygons manually.</p></div>
+  <div class="upload-actions">
+    <input type="file" id="imageFile" accept=".jpg,.jpeg,.png,.webp">
+    <button id="extractBtn" class="primary">Run AI Extraction</button>
+  </div>
+  <div id="message" class="message"></div><div style="margin-top:12px"><a class="primary" href="/gis-3d?load=latest" style="display:inline-block;padding:10px 14px;border-radius:8px;text-decoration:none;color:white;background:#2d7ef7">Continue with These AI Polygons →</a></div>
+</section>
+
+<section class="ai-metrics">
+  <div class="metric"><span>Building Pixels</span><strong id="buildingPixels">—</strong></div>
+  <div class="metric"><span>Image Pixels</span><strong id="imagePixels">—</strong></div>
+  <div class="metric"><span>Building Coverage</span><strong id="coverage">—</strong></div>
+  <div class="metric"><span>Candidate Buildings</span><strong id="buildingCount">—</strong></div>
+</section>
+
+<section class="image-grid">
+  <div class="image-card"><h3>1. Input Image</h3><div class="image-box"><img id="original" alt="Input image"></div></div>
+  <div class="image-card"><h3>2. AI Building Overlay</h3><div class="image-box"><img id="overlay" alt="AI building overlay"></div></div>
+  <div class="image-card"><h3>3. Candidate Building Footprint Polygons</h3><div class="image-box"><img id="polygonOverlay" alt="Building polygon overlay"></div></div>
+</section>
+
+<section class="pipeline">
+  <div><span>01</span><strong>Image</strong><small>Drone / satellite / aerial</small></div>
+  <b>→</b><div><span>02</span><strong>AI Segmentation</strong><small>Building U-Net</small></div>
+  <b>→</b><div><span>03</span><strong>Building Polygons</strong><small>Contour extraction</small></div>
+  <b>→</b><div><span>04</span><strong>Next: GIS Link</strong><small>Parcel + ULPIN</small></div>
+</section>
+
+<section class="table-card">
+  <div class="card-head"><div><h3>Candidate Footprint Register</h3><p>Polygon coordinates are image pixels; V8 preserves this geometry for the 3D stage.</p></div></div>
+  <div class="table-wrap"><table><thead><tr><th>Building</th><th>Area (pixels)</th><th>Vertices</th><th>Bounding Box</th></tr></thead>
+  <tbody id="polygonTable"></tbody></table></div>
+</section>
+
+<section class="result-note" id="resultNote">
+  <strong>How this fits the project</strong>
+  <p>V8 integrates the “Automated building extraction” stage using a building-specific model and tiled inference. The resulting candidate polygons may be passed to the GIS stage only after visual review. Segmentation accuracy is not guaranteed.</p>
+</section>
+</main>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+$("extractBtn").addEventListener("click", async()=>{
+  const file=$("imageFile").files[0];
+  if(!file){$("message").textContent="Choose an image first.";return;}
+  const form=new FormData(); form.append("image",file);
+  $("message").textContent="Running V8 building-footprint AI. The first run may take longer while the trained PyTorch model loads...";
+  $("extractBtn").disabled=true;
+  try{
+    const res=await fetch("/extract-buildings",{method:"POST",body:form});
+    const data=await res.json();
+    if(!res.ok||data.error) throw new Error(data.error||"AI extraction failed.");
+    $("buildingPixels").textContent=data.building_pixels.toLocaleString();
+    $("imagePixels").textContent=data.image_pixels.toLocaleString();
+    $("coverage").textContent=data.building_coverage_percent+"%";
+    $("buildingCount").textContent=data.detected_buildings;
+    $("original").src=data.original;
+    $("overlay").src=data.overlay;
+    $("polygonOverlay").src=data.polygon_overlay;
+    $("polygonTable").innerHTML=data.polygons.map(p=>`<tr>
+      <td>Building ${p.building_no}</td><td>${p.area_pixels.toLocaleString()}</td>
+      <td>${p.vertices}</td><td>x=${p.bbox.x}, y=${p.bbox.y}, ${p.bbox.width} × ${p.bbox.height}</td>
+    </tr>`).join("");
+    // Save only the lightweight polygon result so the GIS + 3D page can use the actual AI output.
+    localStorage.setItem("ulpin_ai_result", JSON.stringify({
+      polygons:data.polygons, image_width:data.image_width, image_height:data.image_height,
+      input_image_url:data.input_image_url,
+      image_pixels:data.image_pixels, detected_buildings:data.detected_buildings,
+      building_coverage_percent:data.building_coverage_percent
+    }));
+    $("resultNote").innerHTML="<strong>V8 AI result • threshold "+data.threshold_used+"</strong><p>"+data.note+"</p>";
+    $("message").textContent=`AI extraction completed: ${data.detected_buildings} candidate footprint polygon(s) detected. It is necessary to review the overlay before using them in GIS.`;
+  }catch(e){
+    $("message").textContent=e.message;
+    if(e.message.includes("AI mask rejected")){
+      $("resultNote").innerHTML="<strong>AI result rejected</strong><p>No polygons were created because the model mask was implausible. Check the input image or model preprocessing before continuing to GIS.</p>";
+    }
+  }
+  finally{$("extractBtn").disabled=false;}
+});
+</script>
+</body>
+</html>
